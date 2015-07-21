@@ -85,7 +85,7 @@ port_alloc_fail:
 	//delete if port is empty
 	;
 	IPv4Interface* interface = ni_ip_get(service_endpoint->ni, service_endpoint->addr);
-	if(set_is_empty(interface->tcp_ports) && set_is_empty(interface->udp_ports)) {
+	if(interface->tcp_ports && set_is_empty(interface->tcp_ports) && interface->udp_ports && set_is_empty(interface->udp_ports)) {
 		ni_ip_remove(service_endpoint->ni, service_endpoint->addr);
 	}
 
@@ -137,7 +137,7 @@ bool service_free(Service* service) {
 	//delete ip if port is empty
 
 	IPv4Interface* interface = ni_ip_get(service->endpoint.ni, service->endpoint.addr);
-	if(set_is_empty(interface->tcp_ports) && set_is_empty(interface->udp_ports)) {
+	if(interface->tcp_ports && set_is_empty(interface->tcp_ports) && interface->udp_ports && set_is_empty(interface->udp_ports)) {
 		ni_ip_remove(service->endpoint.ni, service->endpoint.addr);
 	}
 
@@ -267,11 +267,15 @@ bool service_remove_private_addr(Service* service, NetworkInterface* ni) {
 		return false;
 
 	//Remove servers belong NetworkInterface
-	List* servers = ni_config_get(ni, SERVERS);
-	ListIterator iter;
-	list_iterator_init(&iter, servers);
-	while(list_iterator_has_next(&iter)) {
-		Server* server = list_iterator_next(&iter);
+	Map* servers = ni_config_get(ni, SERVERS);
+	if(!servers)
+		return true;
+	
+	MapIterator iter;
+	map_iterator_init(&iter, servers);
+	while(map_iterator_has_next(&iter)) {
+		MapEntry* entry = map_iterator_next(&iter);
+		Server* server = entry->data;
 
 		if(server->state == SERVER_STATE_ACTIVE) {
 			list_remove_data(service->active_servers, server);
@@ -290,11 +294,12 @@ bool service_remove_private_addr(Service* service, NetworkInterface* ni) {
 	uint16_t count = ni_count();
 	for(int i = 0; i < count; i++) {
 		NetworkInterface* ni = ni_get(i);
-		Map* Services = ni_config_get(ni, SERVICES);
+		Map* services = ni_config_get(ni, SERVICES);
+		if(!services)
+			continue;
 
 		MapIterator iter;
-		map_iterator_init(&iter, Services);
-
+		map_iterator_init(&iter, services);
 		while(map_iterator_has_next(&iter)) {
 			MapEntry* entry = map_iterator_next(&iter);
 			Service* _service = entry->data;
@@ -512,7 +517,7 @@ bool service_remove(Service* service, uint64_t wait) {
 	}
 
 	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-	if(sessions && map_is_empty(sessions)) { //none session
+	if((sessions && map_is_empty(sessions)) || !sessions) { //none session
 		service_remove_force(service); 
 		return true;
 	} else {
@@ -537,18 +542,30 @@ bool service_remove_force(Service* service) {
 
 	service->state = SERVICE_STATE_DEACTIVE;
 
+	//Remove sessions
 	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
 	if(sessions && !map_is_empty(sessions)) {
+		MapIterator iter;
+		map_iterator_init(&iter, sessions);
+		while(map_iterator_has_next(&iter)) {
+			MapEntry* entry = map_iterator_next(&iter);
+			//uint32_t addr = entry->data;
+			NetworkInterface* ni = entry->key;
+			service_remove_private_addr(service, ni);
+			map_iterator_remove(&iter);
+		}
 	}
 
 	Map* private_endpoints = service->private_endpoints;
-	MapIterator iter;
-	map_iterator_init(&iter, private_endpoints);
-	while(map_iterator_has_next(&iter)) {
-		MapEntry* entry = map_iterator_next(&iter);
-		//uint32_t addr = entry->data;
-		NetworkInterface* ni = entry->key;
-		service_remove_private_addr(service, ni);
+	if(!private_endpoints) {
+		MapIterator iter;
+		map_iterator_init(&iter, private_endpoints);
+		while(map_iterator_has_next(&iter)) {
+			MapEntry* entry = map_iterator_next(&iter);
+			//uint32_t addr = entry->data;
+			NetworkInterface* ni = entry->key;
+			service_remove_private_addr(service, ni);
+		}
 	}
 
 	service_free(service);

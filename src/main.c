@@ -157,7 +157,6 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 		uint64_t wait = 0;
 		Service* service = NULL;
 
-		i++;
 		for(;i < argc; i++) {
 			if(!strcmp(argv[i], "-t") && !service) {
 				i++;
@@ -170,14 +169,20 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				if(is_uint8(argv[i])) {
 					 uint8_t ni_num = parse_uint8(argv[i]);
 					service_endpoint.ni = ni_get(ni_num);
-					 if(!service_endpoint.ni)
-						 return i;
-				} else
+					 if(!service_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
+						return i;
+					 }
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				service = service_get(&service_endpoint);
-				if(!service)
+				if(!service) {
+					printf("Can'nt found service\n");
 					return i;
+				}
 
 				continue;
 			} else if(!strcmp(argv[i], "-u") && !service) {
@@ -189,16 +194,22 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				i++;
 
 				if(is_uint8(argv[i])) {
-					 uint8_t ni_num = parse_uint8(argv[i]);
+					uint8_t ni_num = parse_uint8(argv[i]);
 					service_endpoint.ni = ni_get(ni_num);
-					 if(!service_endpoint.ni)
-						 return i;
-				} else
+					if(!service_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
+						return i;
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				service = service_get(&service_endpoint);
-				if(!service)
+				if(!service) {
+					printf("Can'nt found service\n");
 					return i;
+				}
 
 				continue;
 			} else if(!strcmp(argv[i], "-f")) {
@@ -208,8 +219,8 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				return i;
 		}
 
-		if(service == NULL) {
-			printf("Can'nt found Service\n");
+		if(!service) {
+			printf("Can'nt found service\n");
 			return -1;
 		}
 
@@ -329,7 +340,7 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				} else
 					return i;
 
-				server = server_alloc(&server_endpoint);
+				server = server_get(&server_endpoint);
 				if(!server)
 					return i;
 
@@ -350,7 +361,7 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				} else
 					return i;
 
-				server = server_alloc(&server_endpoint);
+				server = server_get(&server_endpoint);
 				if(!server)
 					return i;
 

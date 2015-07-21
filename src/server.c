@@ -35,6 +35,7 @@ static bool server_add(NetworkInterface* ni, Server* server) {
 
 	uint64_t key = (uint64_t)server->endpoint.protocol << 48 | (uint64_t)server->endpoint.addr << 16 | (uint64_t)server->endpoint.port;
 	if(!map_put(servers, (void*)key, server)) {
+		printf("Map put fail\n");
 		return false;
 	}
 
@@ -52,25 +53,61 @@ static bool server_add(NetworkInterface* ni, Server* server) {
 			MapEntry* entry = map_iterator_next(&iter);
 			Service* service = entry->data;
 
+			if(!service->private_endpoints)
+				continue;
+
 			if(!map_contains(service->private_endpoints, ni))
 				continue;
 
-			//list_remove_data(service->active_servers, server);
-			//list_remove_data(service->deactive_servers, server);
 			if(server->state == SERVER_STATE_ACTIVE) {
-				list_add(service->active_servers, server);
+				if(!list_add(service->active_servers, server)) {
+					printf("List add fail\n");
+					goto list_add_error;
+				}
 			} else {
-				list_add(service->deactive_servers, server);
+				if(!list_add(service->deactive_servers, server)) {
+					printf("List add fail\n");
+					goto list_add_error;
+				}
 			}
 		}
 	}
 
 	return true;
+
+list_add_error:
+	//remove to service's server list
+	for(int i = 0; i < count; i++) {
+		NetworkInterface* service_ni = ni_get(i);
+		Map* services = ni_config_get(service_ni, SERVICES);
+		if(!services)
+			continue;
+
+		MapIterator iter;
+		map_iterator_init(&iter, services);
+		while(map_iterator_has_next(&iter)) {
+			MapEntry* entry = map_iterator_next(&iter);
+			Service* service = entry->data;
+
+			if(!service->private_endpoints)
+				continue;
+
+			if(!map_contains(service->private_endpoints, ni))
+				continue;
+
+			if(!list_remove_data(service->active_servers, server))
+				continue;
+			else if(!list_remove_data(service->deactive_servers, server))
+				continue;
+		}
+	}
+
+	return false;
 }
 
 Server* server_alloc(Endpoint* server_endpoint) {
 	size_t size = sizeof(Server);
-	Server* server = (Server*)malloc(size);
+	Server* server = (Server*)__malloc(size, server_endpoint->ni->pool);
 	if(!server) {
 		printf("Can'nt allocation server\n");
 		return NULL;
@@ -84,10 +121,13 @@ Server* server_alloc(Endpoint* server_endpoint) {
 	server_set_mode(server, MODE_NAT);
 
 	if(!server_add(server->endpoint.ni, server))
-		goto error;
-return server;
+		goto server_add_fail;
 
-error:
+	return server;
+
+server_add_fail:
+	__free(server, server_endpoint->ni->pool);
+
 	return NULL;
 }
 
@@ -140,6 +180,9 @@ bool server_free(Server* server) {
 			MapEntry* entry = map_iterator_next(&iter);
 			Service* service = entry->data;
 
+			if(!service->private_endpoints)
+				continue;
+
 			if(map_contains(service->private_endpoints, server->endpoint.ni)) {
 				if(list_remove_data(service->active_servers, server))
 					continue;
@@ -149,7 +192,7 @@ bool server_free(Server* server) {
 		}
 	}
 
-	free(server);
+	__free(server, server->endpoint.ni->pool);
 
 	return true;
 }
@@ -181,7 +224,7 @@ void server_is_remove_grace(Server* server) {
 		return;
 
 	Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-	if(map_is_empty(sessions)) { //none session //		
+	if(sessions && map_is_empty(sessions)) { //none session //		
 		if(server->event_id != 0) {
 			event_timer_remove(server->event_id);
 			server->event_id = 0;
@@ -214,9 +257,10 @@ bool server_remove(Server* server, uint64_t wait) {
 
 		return true;
 	}
+	if(!server)
+		return false;
 
-	Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-	if(map_is_empty(sessions)) {
+	if((server->sessions && map_is_empty(server->sessions)) || !server->sessions) {
 		server_remove_force(server);
 		return true;
 	} else {
@@ -255,25 +299,24 @@ bool server_remove_force(Server* server) {
 	}
 
 	Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-	if(map_is_empty(sessions)) {
-		//delet from ni
-		Map* servers = ni_config_get(server->endpoint.ni, SERVERS);
-		uint64_t key = (uint64_t)server->endpoint.protocol << 48 | (uint64_t)server->endpoint.addr << 16 | (uint64_t)server->endpoint.port;
-		map_remove(servers, (void*)key);
-
-		server_free(server);
-		return true;
+	if(sessions && !map_is_empty(sessions)) {
+		MapIterator iter;
+		map_iterator_init(&iter, sessions);
+		while(map_iterator_has_next(&iter)) {
+			MapEntry* entry = map_iterator_next(&iter);
+			Session* session = entry->data;
+			
+			service_free_session(session);
+		}
 	}
 
 	server->state = SERVER_STATE_DEACTIVE;
-	MapIterator iter;
-	map_iterator_init(&iter, sessions);
-	while(map_iterator_has_next(&iter)) {
-		MapEntry* entry = map_iterator_next(&iter);
-		Session* session = entry->data;
-		
-		service_free_session(session);
-	}
+	//delet from ni
+	Map* servers = ni_config_get(server->endpoint.ni, SERVERS);
+	uint64_t key = (uint64_t)server->endpoint.protocol << 48 | (uint64_t)server->endpoint.addr << 16 | (uint64_t)server->endpoint.port;
+	map_remove(servers, (void*)key);
+
+	server_free(server);
 
 	return true;
 }
