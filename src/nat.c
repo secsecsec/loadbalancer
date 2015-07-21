@@ -45,7 +45,6 @@ Session* nat_tcp_session_alloc(Endpoint* server_endpoint, Endpoint* service_endp
 	session->untranslate = nat_tcp_untranslate;
 	session->free = nat_tcp_free;
 
-	//add recharege
 	return session;
 }
 
@@ -148,10 +147,12 @@ static bool nat_tcp_untranslate(Session* session, Packet* packet) {
 	tcp->destination = endian16(session->client_endpoint.port);
 
 	tcp_pack(packet, endian16(ip->length) - ip->ihl * 4 - TCP_LEN);
+
 	if(tcp->fin) {
 		session_set_fin(session);
 	} else
 		session_recharge(session);
+
 	return true;
 }
 

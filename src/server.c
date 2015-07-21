@@ -156,6 +156,9 @@ bool server_free(Server* server) {
 
 Server* server_get(Endpoint* server_endpoint) {
 	Map* servers = ni_config_get(server_endpoint->ni, SERVERS);
+	if(!servers)
+		return NULL;
+
 	uint64_t key = (uint64_t)server_endpoint->protocol << 48 | (uint64_t)server_endpoint->addr << 16 | (uint64_t)server_endpoint->port;
 	Server* server = map_get(servers, (void*)key);
 
@@ -164,8 +167,10 @@ Server* server_get(Endpoint* server_endpoint) {
 
 Session* server_get_session(Endpoint* client_endpoint) {
 	Map* sessions = ni_config_get(client_endpoint->ni, SESSIONS);
-	uint64_t key = ((uint64_t)client_endpoint->protocol << 48 | (uint64_t)client_endpoint->addr << 16 | (uint64_t)client_endpoint->port);
+	if(!sessions)
+		return NULL;
 
+	uint64_t key = ((uint64_t)client_endpoint->protocol << 48 | (uint64_t)client_endpoint->addr << 16 | (uint64_t)client_endpoint->port);
 	Session* session = map_get(sessions, (void*)key);
 
 	return session;

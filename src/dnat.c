@@ -11,7 +11,6 @@
 
 #include "dnat.h"
 #include "service.h"
-#include "server.h"
 #include "session.h"
 
 static bool dnat_free(Session* session);
@@ -67,7 +66,6 @@ Session* dnat_udp_session_alloc(Endpoint* server_endpoint, Endpoint* service_end
 	session->untranslate = dnat_udp_untranslate;
 	session->free = dnat_free;
 
-	//set event id
 	return session;
 }
 
@@ -90,6 +88,7 @@ static bool dnat_tcp_translate(Session* session, Packet* translateet) {
 	tcp->destination = endian16(server_endpoint->port);
 
 	tcp_pack(translateet, endian16(ip->length) - ip->ihl * 4 - TCP_LEN);
+
 	if(session->fin && tcp->ack)
 		service_free_session(session);
 	else
@@ -125,8 +124,8 @@ static bool dnat_tcp_untranslate(Session* session, Packet* translateet) {
 
 	ether->smac = endian48(public_endpoint->ni->mac);
 	ether->dmac = endian48(arp_get_mac(public_endpoint->ni, public_endpoint->addr, session->client_endpoint.addr));
-	//ip->source = endian32(public_endpoint->addr);
-	//tcp->source = endian16(public_endpoint->port);
+	ip->source = endian32(public_endpoint->addr);
+	tcp->source = endian16(public_endpoint->port);
 
 	tcp_pack(translateet, endian16(ip->length) - ip->ihl * 4 - TCP_LEN);
 		
@@ -142,12 +141,12 @@ static bool dnat_udp_untranslate(Session* session, Packet* translateet) {
 	Endpoint* public_endpoint = session->public_endpoint;
 	Ether* ether = (Ether*)(translateet->buffer + translateet->start);
 	IP* ip = (IP*)ether->payload;
-	//UDP* udp = (UDP*)ip->body;
+	UDP* udp = (UDP*)ip->body;
 
 	ether->smac = endian48(public_endpoint->ni->mac);
 	ether->dmac = endian48(arp_get_mac(public_endpoint->ni, public_endpoint->addr, session->client_endpoint.addr));
-	//ip->source = endian32(public_endpoint->addr);
-	//udp->source = endian16(public_endpoint->port);
+	ip->source = endian32(public_endpoint->addr);
+	udp->source = endian16(public_endpoint->port);
 
 	udp_pack(translateet, endian16(ip->length) - ip->ihl * 4 - UDP_LEN);
 

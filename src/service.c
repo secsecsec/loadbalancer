@@ -36,6 +36,7 @@ Service* service_alloc(Endpoint* service_endpoint) {
 
 		return map_put(services, (void*)key, service);
 	}
+
 	//add ip
 	if(!ni_ip_get(service_endpoint->ni, service_endpoint->addr)) { 
 		if(!ni_ip_add(service_endpoint->ni, service_endpoint->addr))
@@ -134,6 +135,7 @@ bool service_free(Service* service) {
 	}
 
 	//delete ip if port is empty
+
 	IPv4Interface* interface = ni_ip_get(service->endpoint.ni, service->endpoint.addr);
 	if(set_is_empty(interface->tcp_ports) && set_is_empty(interface->udp_ports)) {
 		ni_ip_remove(service->endpoint.ni, service->endpoint.addr);
@@ -330,12 +332,6 @@ Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endp
 	if(!service)
 		return NULL;
 
-	if(!service->sessions) {
-		service->sessions = map_create(4096, NULL, NULL, service->endpoint.ni->pool);
-		if(!service->sessions)
-			return NULL;
-	}
-
 	if(!((client_endpoint->addr == service->endpoint.addr) && (client_endpoint->protocol == service->endpoint.protocol) && (client_endpoint->port == service->endpoint.port)))
 		return NULL;
 
@@ -346,43 +342,60 @@ Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endp
 	if(!server)
 		return NULL;
 
-	if(!service->private_endpoints)
-		return NULL;
-
 	Endpoint* private_endpoint = map_get(service->private_endpoints, server->endpoint.ni);
 	Session* session = server->create(&(server->endpoint), &(service->endpoint), client_endpoint, private_endpoint);
 	if(!session)
-		goto error_get_session;
+		return NULL;
 
 	//Add to Service
 	uint64_t public_key = session_get_public_key(session);
 	if(!service->sessions) {
 		service->sessions = map_create(4096, NULL, NULL, service->endpoint.ni->pool);
 		if(!service->sessions)
-			goto service_map_createa_fail;
+			goto service_map_put_fail;
 	}
 	if(!map_put(service->sessions, (void*)public_key, session))
-		goto error_session_map_put1;
+		goto service_map_put_fail;
 
 	//Add to Service Interface NI
 	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-	if(!map_put(sessions, (void*)public_key, session))
-		goto error_session_map_put1;
+	if(!sessions) {
+		sessions = map_create(4096, NULL, NULL, service->endpoint.ni->pool);
+		if(!sessions)
+			goto service_ni_map_put_fail;
 
-	uint64_t private_key = session_get_private_key(session);
+		if(!ni_config_put(service->endpoint.ni, SESSIONS, sessions)) {
+			map_destroy(sessions);
+			goto service_ni_map_put_fail;
+		}
+	}
+	if(!map_put(sessions, (void*)public_key, session))
+		goto service_ni_map_put_fail;
+
 	//Add to Server
+	uint64_t private_key = session_get_private_key(session);
 	if(!server->sessions) {
 		server->sessions = map_create(4096, NULL, NULL, server->endpoint.ni->pool);
 		if(!server->sessions)
-			goto server_map_createa_fail;
+			goto server_map_put_fail;
 	}
 	if(!map_put(server->sessions, (void*)private_key, session))
-		goto error_session_map_put2;
+		goto server_map_put_fail;
 
 	//Add to Server Interface NI
 	sessions = ni_config_get(server->endpoint.ni, SESSIONS);
+	if(!sessions) {
+		sessions = map_create(4096, NULL, NULL, server->endpoint.ni->pool);
+		if(!sessions)
+			goto server_ni_map_put_fail;
+
+		if(!ni_config_put(server->endpoint.ni, SESSIONS, sessions)) {
+			map_destroy(sessions);
+			goto server_ni_map_put_fail;
+		}
+	}
 	if(!map_put(sessions, (void*)private_key, session))
-		goto error_session_map_put2;
+		goto server_ni_map_put_fail;
 
 
 
@@ -392,36 +405,22 @@ Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endp
 
 	return session;
 
-	map_remove(sessions, (void*)private_key);
-
-error_session_map_put2:
+server_ni_map_put_fail:
+	map_remove(server->sessions, (void*)private_key);
+server_map_put_fail:
 	sessions = ni_config_get(service->endpoint.ni, SESSIONS);
 	map_remove(sessions, (void*)public_key);
-
-server_map_createa_fail:
-
-error_session_map_put1:
+service_ni_map_put_fail:
+	map_remove(service->sessions, (void*)public_key);
+service_map_put_fail:
 	session->free(session);
-
-service_map_createa_fail:
-
-error_get_session:
-error_get_server:
 
 	return NULL;
 }
 
 bool service_free_session(Session* session) {
-	//Remove from Service Interface NI
-	Map* sessions = ni_config_get(session->public_endpoint->ni, SESSIONS);
-	uint64_t client_key = session_get_public_key(session);
-	if(!map_remove(sessions, (void*)client_key)) {
-		printf("Can'nt remove session from servers\n");
-		goto session_free_fail;
-	}
-
 	//Remove from Server NI
-	sessions = ni_config_get(session->server_endpoint->ni, SESSIONS);
+	Map* sessions = ni_config_get(session->server_endpoint->ni, SESSIONS);
 	uint64_t private_key = session_get_private_key(session);
 	if(!map_remove(sessions, (void*)private_key)) {
 		printf("Can'nt remove session from private ni\n");
@@ -431,7 +430,22 @@ bool service_free_session(Session* session) {
 	Server* server = server_get(session->server_endpoint);
 	//Remove from Server
 	if(!map_remove(server->sessions, (void*)private_key)) {
-		printf("Can'nt remove session from servers\n");
+		printf("Can'nt remove session from private\n");
+		goto session_free_fail;
+	}
+
+	//Remove from Service Interface NI
+	sessions = ni_config_get(session->public_endpoint->ni, SESSIONS);
+	uint64_t client_key = session_get_public_key(session);
+	if(!map_remove(sessions, (void*)client_key)) {
+		printf("Can'nt remove session from service ni\n");
+		goto session_free_fail;
+	}
+
+	//Remove from Service 
+	Service* service = service_get(session->public_endpoint);
+	if(!map_remove(service->sessions, (void*)client_key)) {
+		printf("Can'nt remove session from service ni\n");
 		goto session_free_fail;
 	}
 
@@ -469,6 +483,9 @@ void service_is_remove_grace(Service* service) {
 		return;
 
 	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
+	if(!sessions)
+		return;
+
 	if(map_is_empty(sessions)) { //none session
 		if(service->event_id != 0)
 			event_timer_remove(service->event_id);
@@ -495,7 +512,7 @@ bool service_remove(Service* service, uint64_t wait) {
 	}
 
 	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-	if(map_is_empty(sessions)) { //none session
+	if(sessions && map_is_empty(sessions)) { //none session
 		service_remove_force(service); 
 		return true;
 	} else {
@@ -521,7 +538,7 @@ bool service_remove_force(Service* service) {
 	service->state = SERVICE_STATE_DEACTIVE;
 
 	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-	if(!map_is_empty(sessions)) {
+	if(sessions && !map_is_empty(sessions)) {
 	}
 
 	Map* private_endpoints = service->private_endpoints;

@@ -4,6 +4,9 @@
 #include "endpoint.h"
 
 Server* schedule_round_robin(Service* service, Endpoint* client_endpoint) {
+	if(!service->active_servers)
+		return NULL;
+
 	uint32_t count = list_size(service->active_servers);
 	RoundRobin* roundrobin = service->priv;
 	if(count == 0)
@@ -49,6 +52,8 @@ Server* schedule_random(Service* service, Endpoint* client_endpoint) {
 		
 		return time;
 	}
+	if(!service->active_servers)
+		return NULL;
 
 	uint32_t count = list_size(service->active_servers);
 	if(count == 0)
@@ -60,6 +65,9 @@ Server* schedule_random(Service* service, Endpoint* client_endpoint) {
 }
 
 Server* schedule_least(Service* service, Endpoint* client_endpoint) {
+	if(!service->active_servers)
+		return NULL;
+
 	uint32_t count = list_size(service->active_servers);
 	if(count == 0)
 		return NULL; 
@@ -80,6 +88,9 @@ Server* schedule_least(Service* service, Endpoint* client_endpoint) {
 }
 
 Server* schedule_source_ip_hash(Service* service, Endpoint* client_endpoint) {
+	if(!service->active_servers)
+		return NULL;
+
 	uint32_t count = list_size(service->active_servers);
 	if(count == 0)
 		return NULL;

@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <util/list.h>
-#include <util/event.h>
 #include <util/types.h>
 #include <net/ni.h>
 #include <net/ether.h>
@@ -16,6 +15,7 @@
 #include "session.h"
 
 extern void* __gmalloc_pool;
+
 int lb_ginit() {
 	uint32_t count = ni_count();
 	if(count < 2)
@@ -24,13 +24,7 @@ int lb_ginit() {
 	return 0;
 }
 
-int lb_init() {
-	event_init();
-	return 0;
-}
-
-void lb_loop() {
-	event_loop();
+void lb_destroy() {
 }
 
 bool lb_process(Packet* packet) {
@@ -52,8 +46,8 @@ bool lb_process(Packet* packet) {
 
 		source_endpoint.addr = endian32(ip->source);
 		destination_endpoint.addr = endian32(ip->destination);
-		destination_endpoint.protocol = ip->protocol;
 		source_endpoint.protocol = ip->protocol;
+		destination_endpoint.protocol = ip->protocol;
 
 		switch(ip->protocol) {
 			case IP_PROTOCOL_TCP:
@@ -82,6 +76,7 @@ bool lb_process(Packet* packet) {
 			NetworkInterface* server_ni = session->server_endpoint->ni;
 			session->translate(session, packet);
 			ni_output(server_ni, packet);
+
 			return true;
 		}
 
@@ -91,10 +86,11 @@ bool lb_process(Packet* packet) {
 			NetworkInterface* _ni = session->public_endpoint->ni;
 			session->untranslate(session, packet);
 			ni_output(_ni, packet);
+
 			return true;
 		}
+
 		return false;
 	}
-
 	return false;
 }

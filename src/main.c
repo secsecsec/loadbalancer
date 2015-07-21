@@ -5,6 +5,7 @@
 #include <net/ip.h>
 #include <util/cmd.h>
 #include <util/types.h>
+#include <util/event.h>
 #include <readline.h>
 
 #include "endpoint.h"
@@ -403,14 +404,18 @@ Command commands[] = {
 	},
 	{
 		.name = "service",
-		.desc = "Set Service",
-		.args = "-set [ni name] ip [new ip] gw [new gateway] mask [new netmask] port [new port]",
+		.desc = "Add service, Delete Service, Dump service list",
+		.args = "\tadd [Protocol Public Address:Port][-s Schedule] [-out [Private Address] [Private Port]]\n \
+			\tdelete [Protocol Public Address:Port]\n \
+			\tlist\n",
 		.func = cmd_service
 	},
 	{
 		.name = "server",
-		.desc = "Set server",
-		.args = "-add ip [rip ip] port [rip port]\n-del ip [rip ip] port [rip port]",
+		.desc = "Add server, Delete server, Dump server list",
+		.args = "\tadd [[Protocol] [Server Address]:[Port]][-m nat type]\n \
+			\tdelete [[Protocol] [Server Address]:[Port]]\n \
+			\tlist\n",
 		.func = cmd_server
 	},
 	{
@@ -431,11 +436,12 @@ int ginit(int argc, char** argv) {
 void init(int argc, char** argv) {
 	is_continue = true;
 
+	event_init();
 	cmd_init();
-	lb_init();
 }
 
 void destroy() {
+	lb_destroy();
 }
 
 void gdestroy() {
@@ -464,10 +470,11 @@ int main(int argc, char** argv) {
 				if(!packet)
 					continue;
 
-				lb_process(packet);
+				if(!lb_process(packet))
+					ni_free(packet);
 			}
 		}
-		lb_loop();
+		event_loop();
 
 		char* line = readline();
 		if(line != NULL)
