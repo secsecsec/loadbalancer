@@ -148,9 +148,17 @@ bool service_free(Service* service) {
 }
 
 bool service_set_schedule(Service* service, uint8_t schedule) {
+	if(service->priv)
+		__free(service->priv, service->endpoint.ni->pool);
+
 	switch(schedule) {
 		case SCHEDULE_ROUND_ROBIN:
 			service->next = schedule_round_robin;
+			service->priv = __malloc(sizeof(RoundRobin), service->endpoint.ni->pool);
+			if(!service->priv) {
+				printf("Can'nt set Round Robin\n");
+				return false;
+			}
 			break;
 		case SCHEDULE_RANDOM:
 			service->next = schedule_random;
@@ -163,6 +171,11 @@ bool service_set_schedule(Service* service, uint8_t schedule) {
 			break;
 		case SCHEDULE_WEIGHTED_ROUND_ROBIN:
 			service->next = schedule_weighted_round_robin;
+			service->priv = __malloc(sizeof(RoundRobin), service->endpoint.ni->pool);
+			if(!service->priv) {
+				printf("Can'nt set Round Robin\n");
+				return false;
+			}
 			break;
 		default:
 			return false;
@@ -337,9 +350,6 @@ Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endp
 	if(!service)
 		return NULL;
 
-	if(!((client_endpoint->addr == service->endpoint.addr) && (client_endpoint->protocol == service->endpoint.protocol) && (client_endpoint->port == service->endpoint.port)))
-		return NULL;
-
 	if(service->state != SERVICE_STATE_ACTIVE)
 		return NULL;
 
@@ -402,11 +412,7 @@ Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endp
 	if(!map_put(sessions, (void*)private_key, session))
 		goto server_ni_map_put_fail;
 
-
-
 	session->fin = false;
-	session->event_id = 0;
-	session_recharge(session);
 
 	return session;
 
@@ -454,11 +460,6 @@ bool service_free_session(Session* session) {
 		goto session_free_fail;
 	}
 
-	if(session->event_id != 0) {
-		event_timer_remove(session->event_id);
-		session->event_id = 0;
-	}
-
 	session->free(session);
 
 	return true;
@@ -475,58 +476,60 @@ bool service_empty(NetworkInterface* ni) {
 
 Service* service_get(Endpoint* service_endpoint) {
 	Map* services = ni_config_get(service_endpoint->ni, SERVICES);
-	if(!services)
+	if(!services) {
 		return NULL;
+	}
 
 	uint64_t key = (uint64_t)service_endpoint->protocol << 48 | (uint64_t)service_endpoint->addr << 16 | (uint64_t)service_endpoint->port;
 
 	return map_get(services, (void*)key);
 }
-
-void service_is_remove_grace(Service* service) {
-	if(service->state == SERVICE_STATE_ACTIVE)
-		return;
-
-	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-	if(!sessions)
-		return;
-
-	if(map_is_empty(sessions)) { //none session
-		if(service->event_id != 0)
-			event_timer_remove(service->event_id);
-
-		service_remove_force(service);
-	}
-}
+ //
+ //void service_is_remove_grace(Service* service) {
+ //	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
+ //	if(!sessions)
+ //		return;
+ //
+ //	if(map_is_empty(sessions)) { //none session
+ //		if(service->event_id != 0)
+ //			event_timer_remove(service->event_id);
+ //
+ //		service_remove_force(service);
+ //	}
+ //}
 
 bool service_remove(Service* service, uint64_t wait) {
 	bool service_delete_event(void* context) {
+		Service* service = context;
+
+		service->event_id = 0;
 		service_remove_force(service);
 
 		return false;
 	}
 	bool service_delete0_event(void* context) {
-		Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-		if(map_is_empty(sessions)) { //none session
+		Service* service = context;
+
+		if(map_is_empty(service->sessions)) { //none session
+			service->event_id = 0;
 			service_remove_force(service);
 
-			return true;
+			return false;
 		}
 
-		return false;
+		return true;
 	}
 
-	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-	if((sessions && map_is_empty(sessions)) || !sessions) { //none session
-		service_remove_force(service); 
-		return true;
+	if(!service->sessions || (service->sessions && map_is_empty(service->sessions))) { //none session
+		return service_remove_force(service); 
 	} else {
 		service->state = SERVICE_STATE_DEACTIVE;
 
 		if(wait)
 			service->event_id = event_timer_add(service_delete_event, service, wait, 0);
-		else
-			service->event_id = event_timer_add(service_delete0_event, service, 1000000, 1000000);
+		else {
+			service->event_id = event_timer_add(service_delete0_event, service, 2000000, 2000000);
+		}
 
 		return true;
 	}

@@ -21,6 +21,8 @@
 			rr	-- Round Robin(default).
 			r	-- Random.
 			min	-- Server that has min sessions.
+			h	-- Source IP hashing.
+			w	-- Weighted Round Robin.
 		MODE OPTIONS
 			nat	-- network address transration.
 			dnat	-- destination network address transration.

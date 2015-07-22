@@ -242,6 +242,7 @@ void server_is_remove_grace(Server* server) {
 bool server_remove(Server* server, uint64_t wait) {
 	bool server_delete_event(void* context) {
 		Server* server = context;
+
 		server_remove_force(server);
 
 		return false;
@@ -249,9 +250,9 @@ bool server_remove(Server* server, uint64_t wait) {
 	bool server_delete0_event(void* context) {
 		Server* server = context;
 
-		Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-		if(map_is_empty(sessions)) {
+		if(map_is_empty(server->sessions)) {
 			server_remove_force(server);
+
 			return false;
 		}
 
@@ -260,9 +261,8 @@ bool server_remove(Server* server, uint64_t wait) {
 	if(!server)
 		return false;
 
-	if((server->sessions && map_is_empty(server->sessions)) || !server->sessions) {
-		server_remove_force(server);
-		return true;
+	if(!server->sessions || (server->sessions && map_is_empty(server->sessions))) {
+		return server_remove_force(server);
 	} else {
 		server->state = SERVER_STATE_DEACTIVE;
 
@@ -306,6 +306,7 @@ bool server_remove_force(Server* server) {
 			MapEntry* entry = map_iterator_next(&iter);
 			Session* session = entry->data;
 			
+			event_timer_remove(session->event_id);
 			service_free_session(session);
 		}
 	}

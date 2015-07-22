@@ -3,6 +3,7 @@
 #define DONT_MAKE_WRAPPER
 #include <_malloc.h>
 #undef DONT_MAKE_WRAPPER
+#include <util/event.h>
 #include <net/ether.h>
 #include <net/arp.h>
 #include <net/ip.h>
@@ -89,9 +90,10 @@ static bool dnat_tcp_translate(Session* session, Packet* translateet) {
 
 	tcp_pack(translateet, endian16(ip->length) - ip->ihl * 4 - TCP_LEN);
 
-	if(session->fin && tcp->ack)
+	if(session->fin && tcp->ack) {
+		event_timer_remove(session->event_id);
 		service_free_session(session);
-	else
+	} else
 		session_recharge(session);
 
 	return true;

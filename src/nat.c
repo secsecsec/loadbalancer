@@ -4,6 +4,7 @@
 #include <_malloc.h>
 #undef DONT_MAKE_WRAPPER
 #include <util/map.h>
+#include <util/event.h>
 #include <net/packet.h>
 #include <net/ether.h>
 #include <net/arp.h>
@@ -102,11 +103,11 @@ static bool nat_tcp_translate(Session* session, Packet* packet) {
 	tcp->destination = endian16(server_endpoint->port);
 
 	tcp_pack(packet, endian16(ip->length) - ip->ihl * 4 - TCP_LEN);
-	session_recharge(session);
 
-	if(session->fin && tcp->ack)
+	if(session->fin && tcp->ack) {
+		event_timer_remove(session->event_id);
 		service_free_session(session);
-	else
+	} else
 		session_recharge(session);
 
 	return true;
