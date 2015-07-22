@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <util/list.h>
+#include <util/map.h>
 #include <util/types.h>
 #include <net/ni.h>
 #include <net/ether.h>
@@ -93,4 +94,76 @@ bool lb_process(Packet* packet) {
 		return false;
 	}
 	return false;
+}
+
+bool lb_is_all_destroied() {
+	int count = ni_count();
+	for(int i = 0; i < count; i++) {
+		NetworkInterface* ni = ni_get(i);
+		Map* services = ni_config_get(ni, SERVICES);
+		if(services && !map_is_empty(services))
+			return false;
+
+		Map* servers = ni_config_get(ni, SERVERS);
+		if(servers && !map_is_empty(servers))
+			return false;
+	}
+
+	return true;
+}
+
+void lb_remove(uint64_t wait) {
+	int count = ni_count();
+	for(int i = 0; i < count; i++) {
+		NetworkInterface* ni = ni_get(i);
+		Map* services = ni_config_get(ni, SERVICES);
+		if(services && !map_is_empty(services)) {
+			MapIterator iter;
+			map_iterator_init(&iter, services);
+			while(map_iterator_has_next(&iter)) {
+				MapEntry* entry = map_iterator_next(&iter);
+				Service* service = entry->data;
+				service_remove(service, wait);
+			}
+		}
+
+		Map* servers = ni_config_get(ni, SERVERS);
+		if(servers && !map_is_empty(servers)) {
+			MapIterator iter;
+			map_iterator_init(&iter, servers);
+			while(map_iterator_has_next(&iter)) {
+				MapEntry* entry = map_iterator_next(&iter);
+				Server* server = entry->data;
+				server_remove(server, wait);
+			}
+		}
+	}
+}
+
+void lb_remove_force() {
+	int count = ni_count();
+	for(int i = 0; i < count; i++) {
+		NetworkInterface* ni = ni_get(i);
+		Map* services = ni_config_get(ni, SERVICES);
+		if(services && !map_is_empty(services)) {
+			MapIterator iter;
+			map_iterator_init(&iter, services);
+			while(map_iterator_has_next(&iter)) {
+				MapEntry* entry = map_iterator_next(&iter);
+				Service* service = entry->data;
+				service_remove_force(service);
+			}
+		}
+
+		Map* servers = ni_config_get(ni, SERVERS);
+		if(servers && !map_is_empty(servers)) {
+			MapIterator iter;
+			map_iterator_init(&iter, servers);
+			while(map_iterator_has_next(&iter)) {
+				MapEntry* entry = map_iterator_next(&iter);
+				Server* server = entry->data;
+				server_remove_force(server);
+			}
+		}
+	}
 }

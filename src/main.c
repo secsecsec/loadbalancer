@@ -42,18 +42,24 @@ static uint16_t str_to_port(char* argv) {
 }
 
 static int cmd_exit(int argc, char** argv, void(*callback)(char* result, int exit_status)) {
+	bool is_exit_ok(void* context) {
+		if(lb_is_all_destroied()) {
+			is_continue = false;
+			return false;
+		}
+		return true;
+	}
 	if(argc == 1) {
-		//grace
-		//is_continue = false;
-		//add event grace check
+		lb_remove(0);
+		event_idle_add(is_exit_ok, NULL);
 		return 0;
 	}
 
 	bool is_force = false;
 	uint64_t wait = 0;
-	int i = 2;
+	int i = 1;
 	for(; i < argc; i++) {
-		if(!strcmp(argv[1], "-f")) {
+		if(!strcmp(argv[i], "-f")) {
 			is_continue = false;
 		} else if(!strcmp(argv[i], "-w")) {
 			i++;
@@ -72,10 +78,11 @@ static int cmd_exit(int argc, char** argv, void(*callback)(char* result, int exi
 	}
 
 	if(is_force) {
-		//remove force
+		lb_remove_force();
+		is_continue = false;
 	} else {
-		//remove wait graceful
-		//add event grace check
+		lb_remove(wait);
+		event_idle_add(is_exit_ok, NULL);
 	}
 
 	return 0;
