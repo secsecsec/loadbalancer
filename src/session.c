@@ -15,7 +15,6 @@
 bool session_recharge(Session* session) {
 	bool session_free_event(void* context) {
 		Session* session = context;
-		session->event_id = 0;
 		service_free_session(session);
 
 		return false;
@@ -24,33 +23,36 @@ bool session_recharge(Session* session) {
 		return true;
 
 	if(!session->event_id) {
-		session->event_id = event_timer_add(session_free_event, session, 30000000, 30000000);
-		if(session->event_id)
-			return true;
-		else
+		session->event_id = event_timer_add(session_free_event, session, 300000000, 300000000);
+		if(!session->event_id) {
+			printf("Can'nt add service event\n");
 			return false;
-	} else
+		}
+
+		return true;
+	} else {
 		return event_timer_update(session->event_id);
+	}
 }
 
 bool session_set_fin(Session* session) {
 	bool gc(void* context) {
 		Session* session = context;
-		session->event_id = 0;
-		
-		printf("Timeout fin\n");
 		service_free_session(session);
 		
 		return false;
 	}
+	if(session->fin)
+		return true;
 		
-	if(session->event_id)
+	if(session->event_id) {
 		event_timer_remove(session->event_id);
+	}
 
 	session->fin = true;
 	session->event_id = event_timer_add(gc, session, 3000, 3000);
 	if(session->event_id == 0) {
-		printf("Can'nt add service\n");
+		printf("Can'nt add service event\n");
 		return false;
 	}
 	

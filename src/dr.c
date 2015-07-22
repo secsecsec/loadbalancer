@@ -10,7 +10,6 @@
 #include "dr.h"
 #include "endpoint.h"
 #include "session.h"
-#include "server.h"
 
 static bool dr_translate(Session* session, Packet* packet);
 static bool dr_untranslate(Session* session, Packet* packet);
@@ -51,7 +50,7 @@ static bool dr_translate(Session* session, Packet* packet) {
 
 	Endpoint* server_endpoint = session->server_endpoint;
 	ether->smac = endian48(server_endpoint->ni->mac);
-	ether->dmac = endian48(arp_get_mac(server_endpoint->ni, session->private_endpoint.addr, server_endpoint->addr));
+	ether->dmac = endian48(arp_get_mac(server_endpoint->ni, session->server_endpoint->addr, session->private_endpoint.addr));
 	session_recharge(session);
 
 	return true;

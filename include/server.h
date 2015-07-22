@@ -33,6 +33,7 @@ typedef struct _Server {
 Server* server_alloc(Endpoint* server_endpoint);
 bool server_free(Server* server);
 bool server_set_mode(Server* server, uint8_t mode);
+bool server_set_weight(Server* server, uint8_t weight);
 
 Server* server_get(Endpoint* server_endpoint);
 

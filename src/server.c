@@ -35,6 +35,7 @@ static bool server_add(NetworkInterface* ni, Server* server) {
 
 	uint64_t key = (uint64_t)server->endpoint.protocol << 48 | (uint64_t)server->endpoint.addr << 16 | (uint64_t)server->endpoint.port;
 	if(!map_put(servers, (void*)key, server)) {
+		printf("Map put fail\n");
 		return false;
 	}
 
@@ -52,25 +53,61 @@ static bool server_add(NetworkInterface* ni, Server* server) {
 			MapEntry* entry = map_iterator_next(&iter);
 			Service* service = entry->data;
 
+			if(!service->private_endpoints)
+				continue;
+
 			if(!map_contains(service->private_endpoints, ni))
 				continue;
 
-			//list_remove_data(service->active_servers, server);
-			//list_remove_data(service->deactive_servers, server);
 			if(server->state == SERVER_STATE_ACTIVE) {
-				list_add(service->active_servers, server);
+				if(!list_add(service->active_servers, server)) {
+					printf("List add fail\n");
+					goto list_add_error;
+				}
 			} else {
-				list_add(service->deactive_servers, server);
+				if(!list_add(service->deactive_servers, server)) {
+					printf("List add fail\n");
+					goto list_add_error;
+				}
 			}
 		}
 	}
 
 	return true;
+
+list_add_error:
+	//remove to service's server list
+	for(int i = 0; i < count; i++) {
+		NetworkInterface* service_ni = ni_get(i);
+		Map* services = ni_config_get(service_ni, SERVICES);
+		if(!services)
+			continue;
+
+		MapIterator iter;
+		map_iterator_init(&iter, services);
+		while(map_iterator_has_next(&iter)) {
+			MapEntry* entry = map_iterator_next(&iter);
+			Service* service = entry->data;
+
+			if(!service->private_endpoints)
+				continue;
+
+			if(!map_contains(service->private_endpoints, ni))
+				continue;
+
+			if(!list_remove_data(service->active_servers, server))
+				continue;
+			else if(!list_remove_data(service->deactive_servers, server))
+				continue;
+		}
+	}
+
+	return false;
 }
 
 Server* server_alloc(Endpoint* server_endpoint) {
 	size_t size = sizeof(Server);
-	Server* server = (Server*)malloc(size);
+	Server* server = (Server*)__malloc(size, server_endpoint->ni->pool);
 	if(!server) {
 		printf("Can'nt allocation server\n");
 		return NULL;
@@ -84,10 +121,13 @@ Server* server_alloc(Endpoint* server_endpoint) {
 	server_set_mode(server, MODE_NAT);
 
 	if(!server_add(server->endpoint.ni, server))
-		goto error;
-return server;
+		goto server_add_fail;
 
-error:
+	return server;
+
+server_add_fail:
+	__free(server, server_endpoint->ni->pool);
+
 	return NULL;
 }
 
@@ -125,6 +165,12 @@ bool server_set_mode(Server* server, uint8_t mode) {
 	return true;
 }
 
+bool server_set_weight(Server* server, uint8_t weight) {
+	server->weight = weight;
+
+	return true;
+}
+
 bool server_free(Server* server) {
 	uint32_t count = ni_count();
 	for(int i = 0; i < count; i++) {
@@ -140,6 +186,9 @@ bool server_free(Server* server) {
 			MapEntry* entry = map_iterator_next(&iter);
 			Service* service = entry->data;
 
+			if(!service->private_endpoints)
+				continue;
+
 			if(map_contains(service->private_endpoints, server->endpoint.ni)) {
 				if(list_remove_data(service->active_servers, server))
 					continue;
@@ -149,13 +198,16 @@ bool server_free(Server* server) {
 		}
 	}
 
-	free(server);
+	__free(server, server->endpoint.ni->pool);
 
 	return true;
 }
 
 Server* server_get(Endpoint* server_endpoint) {
 	Map* servers = ni_config_get(server_endpoint->ni, SERVERS);
+	if(!servers)
+		return NULL;
+
 	uint64_t key = (uint64_t)server_endpoint->protocol << 48 | (uint64_t)server_endpoint->addr << 16 | (uint64_t)server_endpoint->port;
 	Server* server = map_get(servers, (void*)key);
 
@@ -164,8 +216,10 @@ Server* server_get(Endpoint* server_endpoint) {
 
 Session* server_get_session(Endpoint* client_endpoint) {
 	Map* sessions = ni_config_get(client_endpoint->ni, SESSIONS);
-	uint64_t key = ((uint64_t)client_endpoint->protocol << 48 | (uint64_t)client_endpoint->addr << 16 | (uint64_t)client_endpoint->port);
+	if(!sessions)
+		return NULL;
 
+	uint64_t key = ((uint64_t)client_endpoint->protocol << 48 | (uint64_t)client_endpoint->addr << 16 | (uint64_t)client_endpoint->port);
 	Session* session = map_get(sessions, (void*)key);
 
 	return session;
@@ -176,7 +230,7 @@ void server_is_remove_grace(Server* server) {
 		return;
 
 	Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-	if(map_is_empty(sessions)) { //none session //		
+	if(sessions && map_is_empty(sessions)) { //none session //		
 		if(server->event_id != 0) {
 			event_timer_remove(server->event_id);
 			server->event_id = 0;
@@ -194,6 +248,7 @@ void server_is_remove_grace(Server* server) {
 bool server_remove(Server* server, uint64_t wait) {
 	bool server_delete_event(void* context) {
 		Server* server = context;
+
 		server_remove_force(server);
 
 		return false;
@@ -201,19 +256,19 @@ bool server_remove(Server* server, uint64_t wait) {
 	bool server_delete0_event(void* context) {
 		Server* server = context;
 
-		Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-		if(map_is_empty(sessions)) {
+		if(map_is_empty(server->sessions)) {
 			server_remove_force(server);
+
 			return false;
 		}
 
 		return true;
 	}
+	if(!server)
+		return false;
 
-	Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-	if(map_is_empty(sessions)) {
-		server_remove_force(server);
-		return true;
+	if(!server->sessions || (server->sessions && map_is_empty(server->sessions))) {
+		return server_remove_force(server);
 	} else {
 		server->state = SERVER_STATE_DEACTIVE;
 
@@ -250,25 +305,25 @@ bool server_remove_force(Server* server) {
 	}
 
 	Map* sessions = ni_config_get(server->endpoint.ni, SESSIONS);
-	if(map_is_empty(sessions)) {
-		//delet from ni
-		Map* servers = ni_config_get(server->endpoint.ni, SERVERS);
-		uint64_t key = (uint64_t)server->endpoint.protocol << 48 | (uint64_t)server->endpoint.addr << 16 | (uint64_t)server->endpoint.port;
-		map_remove(servers, (void*)key);
-
-		server_free(server);
-		return true;
+	if(sessions && !map_is_empty(sessions)) {
+		MapIterator iter;
+		map_iterator_init(&iter, sessions);
+		while(map_iterator_has_next(&iter)) {
+			MapEntry* entry = map_iterator_next(&iter);
+			Session* session = entry->data;
+			
+			event_timer_remove(session->event_id);
+			service_free_session(session);
+		}
 	}
 
 	server->state = SERVER_STATE_DEACTIVE;
-	MapIterator iter;
-	map_iterator_init(&iter, sessions);
-	while(map_iterator_has_next(&iter)) {
-		MapEntry* entry = map_iterator_next(&iter);
-		Session* session = entry->data;
-		
-		service_free_session(session);
-	}
+	//delet from ni
+	Map* servers = ni_config_get(server->endpoint.ni, SERVERS);
+	uint64_t key = (uint64_t)server->endpoint.protocol << 48 | (uint64_t)server->endpoint.addr << 16 | (uint64_t)server->endpoint.port;
+	map_remove(servers, (void*)key);
+
+	server_free(server);
 
 	return true;
 }
@@ -278,9 +333,9 @@ void server_dump() {
 		if(state == SERVER_STATE_ACTIVE)
 			printf("ACTIVE\t\t");
 		else if(state == SERVER_STATE_DEACTIVE)
-			printf("Removing\t");
+			printf("DEACTIVE\t");
 		else
-			printf("Unnowkn\t");
+			printf("Unknown\t");
 	}
 	void print_mode(uint8_t mode) {
 		if(mode == MODE_NAT)
@@ -290,7 +345,7 @@ void server_dump() {
 		else if(mode == MODE_DR)
 			printf("DR\t");
 		else
-			printf("Unnowkn\t");
+			printf("Unknown\t");
 	}
 	void print_addr_port(uint32_t addr, uint16_t port) {
 		printf("%d.%d.%d.%d:%d\t", (addr >> 24) & 0xff, (addr >> 16) & 0xff,
@@ -303,6 +358,9 @@ void server_dump() {
 				printf("%d\t", i);
 		}
 	}
+	void print_weight(uint8_t weight) {
+		printf("%d\t", weight);
+	}
 	void print_session_count(Map* sessions) {
 		if(sessions)
 			printf("%d\t", map_size(sessions));
@@ -310,7 +368,7 @@ void server_dump() {
 			printf("0\t");
 	}
 
-	printf("State\t\tAddr:Port\t\tMode\tNIC\tSessions\n");
+	printf("State\t\tAddr:Port\t\tMode\tNIC\tWeight\tSessions\n");
 	uint8_t count = ni_count();
 	for(int i = 0; i < count; i++) {
 		Map* servers = ni_config_get(ni_get(i), SERVERS);
@@ -327,6 +385,7 @@ void server_dump() {
 			print_addr_port(server->endpoint.addr, server->endpoint.port);
 			print_mode(server->mode);
 			print_ni_num(server->endpoint.ni);
+			print_weight(server->weight);
 			print_session_count(server->sessions);
 			printf("\n");
 		}

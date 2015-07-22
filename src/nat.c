@@ -4,6 +4,7 @@
 #include <_malloc.h>
 #undef DONT_MAKE_WRAPPER
 #include <util/map.h>
+#include <util/event.h>
 #include <net/packet.h>
 #include <net/ether.h>
 #include <net/arp.h>
@@ -45,7 +46,6 @@ Session* nat_tcp_session_alloc(Endpoint* server_endpoint, Endpoint* service_endp
 	session->untranslate = nat_tcp_untranslate;
 	session->free = nat_tcp_free;
 
-	//add recharege
 	return session;
 }
 
@@ -103,11 +103,11 @@ static bool nat_tcp_translate(Session* session, Packet* packet) {
 	tcp->destination = endian16(server_endpoint->port);
 
 	tcp_pack(packet, endian16(ip->length) - ip->ihl * 4 - TCP_LEN);
-	session_recharge(session);
 
-	if(session->fin && tcp->ack)
+	if(session->fin && tcp->ack) {
+		event_timer_remove(session->event_id);
 		service_free_session(session);
-	else
+	} else
 		session_recharge(session);
 
 	return true;
@@ -148,10 +148,12 @@ static bool nat_tcp_untranslate(Session* session, Packet* packet) {
 	tcp->destination = endian16(session->client_endpoint.port);
 
 	tcp_pack(packet, endian16(ip->length) - ip->ihl * 4 - TCP_LEN);
+
 	if(tcp->fin) {
 		session_set_fin(session);
 	} else
 		session_recharge(session);
+
 	return true;
 }
 
