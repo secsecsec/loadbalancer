@@ -14,6 +14,7 @@
 #include <net/tcp.h>
 #include <net/udp.h>
 
+#include "private.h"
 #include "service.h"
 #include "server.h"
 #include "session.h"
@@ -186,22 +187,21 @@ bool service_set_schedule(Service* service, uint8_t schedule) {
 }
 
 bool service_add_private_addr(Service* service, Endpoint* _private_endpoint) {
-	if(!service->private_endpoints) {
-		service->private_endpoints = map_create(16, NULL, NULL, service->endpoint.ni->pool);
-		if(!service->private_endpoints)
-			return false;
+	Private* private = private_alloc(_private_endpoint);
+	if(!private) {
+		printf("Can'nt allocate private endpoint\n");
+		return false;
 	}
 
-	ssize_t size = sizeof(Endpoint);
-	Endpoint* private_endpoint = __malloc(size, service->endpoint.ni->pool);
-	memcpy(private_endpoint, _private_endpoint, size);
-
-	if(!ni_ip_get(private_endpoint->ni, private_endpoint->addr)) {
-		if(!ni_ip_add(private_endpoint->ni, private_endpoint->addr)) {
-			map_remove(service->private_endpoints, private_endpoint->ni);
-			__free(private_endpoint, service->endpoint.ni->pool);
-			return false;
+	if(!service->private_endpoints) {
+		service->private_endpoints = map_create(16, NULL, NULL, service->endpoint.ni->pool);
+		if(!service->private_endpoints) {
+			goto private_endpoints_create_fail;
 		}
+	}
+
+	if(!map_put(service->private_endpoints, private->endpoint.ni, private)) {
+		goto private_endpoint_put_fail;
 	}
 
 	//create active & deactive server list
@@ -219,7 +219,7 @@ bool service_add_private_addr(Service* service, Endpoint* _private_endpoint) {
 		}
 	}
 
-	Map* servers = ni_config_get(private_endpoint->ni, SERVERS);
+	Map* servers = ni_config_get(private->endpoint.ni, SERVERS);
 
 	if(servers) {
 		MapIterator iter;
@@ -239,14 +239,7 @@ bool service_add_private_addr(Service* service, Endpoint* _private_endpoint) {
 		}
 	}
 
-	if(!map_put(service->private_endpoints, private_endpoint->ni, private_endpoint)) {
-		goto private_endpoint_put_fail;
-	}
-
 	return true;
-
-private_endpoint_put_fail:
-	service_remove_private_addr(service, private_endpoint->ni);
 
 server_add_fail:
 	;
@@ -267,6 +260,16 @@ server_add_fail:
 	}
 
 list_create_fail:
+	map_remove(service->private_endpoints, private->endpoint.ni);
+
+private_endpoint_put_fail:
+	if(map_is_empty(service->private_endpoints)) {
+		map_destroy(service->private_endpoints);
+		service->private_endpoints = NULL;
+	}
+
+private_endpoints_create_fail:
+	private_free(private);
 
 	return false;
 }
@@ -281,55 +284,32 @@ bool service_remove_private_addr(Service* service, NetworkInterface* ni) {
 
 	//Remove servers belong NetworkInterface
 	Map* servers = ni_config_get(ni, SERVERS);
-	if(!servers)
-		return true;
-	
-	MapIterator iter;
-	map_iterator_init(&iter, servers);
-	while(map_iterator_has_next(&iter)) {
-		MapEntry* entry = map_iterator_next(&iter);
-		Server* server = entry->data;
+	if(servers) {
+		MapIterator iter;
+		map_iterator_init(&iter, servers);
+		while(map_iterator_has_next(&iter)) {
+			MapEntry* entry = map_iterator_next(&iter);
+			Server* server = entry->data;
 
-		if(server->state == SERVER_STATE_ACTIVE) {
-			list_remove_data(service->active_servers, server);
-		} else {
-			list_remove_data(service->deactive_servers, server);
+			if(server->state == SERVER_STATE_ACTIVE) {
+				list_remove_data(service->active_servers, server);
+			} else {
+				list_remove_data(service->deactive_servers, server);
+			}
 		}
 	}
 
 	//Remove Address in NetworkInterface
-	Endpoint* private_endpoint = map_remove(service->private_endpoints, ni);
-	if(!private_endpoint)
+	Private* private = map_remove(service->private_endpoints, ni);
+	if(!private)
 		return false;
-	uint32_t addr = private_endpoint->addr;
-	__free(private_endpoint, service->endpoint.ni->pool);
 
-	uint16_t count = ni_count();
-	for(int i = 0; i < count; i++) {
-		NetworkInterface* ni = ni_get(i);
-		Map* services = ni_config_get(ni, SERVICES);
-		if(!services)
-			continue;
-
-		MapIterator iter;
-		map_iterator_init(&iter, services);
-		while(map_iterator_has_next(&iter)) {
-			MapEntry* entry = map_iterator_next(&iter);
-			Service* _service = entry->data;
-			if(service == _service)
-				continue;
-
-			if(!_service->private_endpoints)
-				continue;
-
-			Endpoint* _private_endpoint = map_get(_service->private_endpoints, ni);
-
-			if(addr == _private_endpoint->addr)
-				return true;
-		}
+	if(map_is_empty(service->private_endpoints)) {
+		map_destroy(service->private_endpoints);
+		service->private_endpoints = NULL;
 	}
-	
-	ni_ip_remove(ni, addr);
+
+	private_free(private);
 
 	return true;
 }
