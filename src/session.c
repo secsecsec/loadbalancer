@@ -23,7 +23,7 @@ bool session_recharge(Session* session) {
 		return true;
 
 	if(!session->event_id) {
-		session->event_id = event_timer_add(session_free_event, session, 30000000, 30000000);
+		session->event_id = event_timer_add(session_free_event, session, 300000000, 300000000);
 		if(!session->event_id) {
 			printf("Can'nt add service event\n");
 			return false;

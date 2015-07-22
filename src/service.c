@@ -606,16 +606,16 @@ void service_dump() {
 				printf("Random\t\t");
 				break;
 			case SCHEDULE_LEAST:
-				printf("Least\t\t");
+				printf("Least Connection\t\t");
 				break;
 			case SCHEDULE_SOURCE_IP_HASH:
-				printf("Hash\t\t");
+				printf("Hashing\t\t");
 				break;
 			case SCHEDULE_WEIGHTED_ROUND_ROBIN:
 				printf("Weight Round-Robin\t\t");
 				break;
 			default:
-				printf("Unnowkn\t");
+				printf("Unknown\t");
 				break;
 		}
 	}
@@ -664,7 +664,7 @@ void service_dump() {
 			Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
 			print_session_count(sessions);
 			print_server_count(service->active_servers);
-			printf(" \040 ");
+			printf(" / ");
 			print_server_count(service->deactive_servers);
 			printf("\n");
 		}

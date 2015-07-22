@@ -43,16 +43,39 @@ static uint16_t str_to_port(char* argv) {
 
 static int cmd_exit(int argc, char** argv, void(*callback)(char* result, int exit_status)) {
 	if(argc == 1) {
-		is_continue = false;
+		//grace
+		//is_continue = false;
+		//add event grace check
 		return 0;
 	}
 
-	if(argc == 2) {
+	bool is_force = false;
+	uint64_t wait = 0;
+	int i = 2;
+	for(; i < argc; i++) {
 		if(!strcmp(argv[1], "-f")) {
 			is_continue = false;
+		} else if(!strcmp(argv[i], "-w")) {
+			i++;
+			if(is_uint64(argv[i]))
+				wait = parse_uint64(argv[i]);
+			else {
+				printf("Wait time number wrong\n");
+				return i;
+			}
+
+			continue;
+		} else {
+			printf("Wrong arguments\n");
+			return -1;
 		}
+	}
+
+	if(is_force) {
+		//remove force
 	} else {
-		return -1;
+		//remove wait graceful
+		//add event grace check
 	}
 
 	return 0;
@@ -73,12 +96,16 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				i++;
 
 				if(is_uint8(argv[i])) {
-					 uint8_t ni_num = parse_uint8(argv[i]);
+					uint8_t ni_num = parse_uint8(argv[i]);
 					service_endpoint.ni = ni_get(ni_num);
-					if(!service_endpoint.ni)
-						 return i;
-				} else
+					if(!service_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
+						return i;
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				service = service_alloc(&service_endpoint);
 				if(!service)
@@ -96,10 +123,14 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
 					service_endpoint.ni = ni_get(ni_num);
-					if(!service_endpoint.ni)
-						 return i;
-				} else
+					if(!service_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
+						return i;
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				service = service_alloc(&service_endpoint);
 				if(!service)
@@ -132,17 +163,23 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				private_endpoint.port = 0;
 				i++;
 				if(is_uint8(argv[i])) {
-					 uint8_t ni_num = parse_uint8(argv[i]);
-					 private_endpoint.ni = ni_get(ni_num);
-					 if(!private_endpoint.ni)
-						 return i;
-				} else
+					uint8_t ni_num = parse_uint8(argv[i]);
+					private_endpoint.ni = ni_get(ni_num);
+					if(!private_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
+						return i;
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				service_add_private_addr(service, &private_endpoint);
 				continue;
-			} else
+			} else { 
+				printf("Wrong arguments\n");
 				return i;
+			}
 		}
 			
 		if(service == NULL) {
@@ -167,12 +204,12 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				i++;
 
 				if(is_uint8(argv[i])) {
-					 uint8_t ni_num = parse_uint8(argv[i]);
+					uint8_t ni_num = parse_uint8(argv[i]);
 					service_endpoint.ni = ni_get(ni_num);
-					 if(!service_endpoint.ni) {
+					if(!service_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
-					 }
+					}
 				} else {
 					printf("Netowrk Interface number wrong\n");
 					return i;
@@ -215,8 +252,20 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 			} else if(!strcmp(argv[i], "-f")) {
 				is_force = true;
 				continue;
-			} else
+			} else if(!strcmp(argv[i], "-w")) {
+				i++;
+				if(is_uint64(argv[i]))
+					wait = parse_uint64(argv[i]);
+				else {
+					printf("Wait time number wrong\n");
+					return i;
+				}
+
+				continue;
+			} else {
+				printf("Wrong arguments\n");
 				return i;
+			}
 		}
 
 		if(!service) {
@@ -235,8 +284,10 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 		service_dump();
 
 		return 0;
-	} else
+	} else {
+		printf("Unknown Command\n");
 		return -1;
+	}
 
 	return 0;
 }
@@ -258,14 +309,20 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
 					server_endpoint.ni = ni_get(ni_num);
-					if(!server_endpoint.ni)
+					if(!server_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
 						 return i;
-				} else
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				server = server_alloc(&server_endpoint);
-				if(!server)
+				if(!server) {
+					printf("Can'nt allocate server\n");
 					return i;
+				}
 
 				continue;
 			} else if(!strcmp(argv[i], "-u") && !server) {
@@ -279,15 +336,21 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
 					server_endpoint.ni = ni_get(ni_num);
-					if(!server_endpoint.ni)
-						 return i;
-				} else
+					if(!server_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
+						return i;
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 
 				server = server_alloc(&server_endpoint);
-				if(!server)
+				if(!server) {
+					printf("Can'nt allocate server\n");
 					return i;
+				}
 
 				continue;
 			} else if(!strcmp(argv[i], "-m") && !!server) {
@@ -302,13 +365,28 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				} else if(!strcmp(argv[i], "dr")) {
 					mode = MODE_DR;
 					continue;
-				} else
+				} else {
+					printf("Mode type wrong\n");
 					return i;
+				}
 
-				if(!server_set_mode(server, mode))
+				if(!server_set_mode(server, mode)) {
+					printf("Can'nt set Mode\n");
 					return i;
-			} else
+				}
+			} else if(!strcmp(argv[i], "-w") && !!server) {
+				i++;
+				if(is_uint8(argv[i])) {
+					uint8_t weight = parse_uint8(argv[i]);
+					server_set_weight(server, weight);
+				} else {
+					printf("Weight numbe wrong\n");
+					return i;
+				}
+			} else {
+				printf("Wrong arguments\n");
 				return i;
+			}
 		}
 
 		if(server == NULL) {
@@ -335,14 +413,20 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
 					server_endpoint.ni = ni_get(ni_num);
-					if(!server_endpoint.ni)
-						 return i;
-				} else
+					if(!server_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
+						return i;
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				server = server_get(&server_endpoint);
-				if(!server)
+				if(!server) {
+					printf("Can'nt get server\n");
 					return i;
+				}
 
 				continue;
 			} else if(!strcmp(argv[i], "-u") && !server) {
@@ -356,14 +440,20 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
 					server_endpoint.ni = ni_get(ni_num);
-					if(!server_endpoint.ni)
+					if(!server_endpoint.ni) {
+						printf("Netowrk Interface number wrong\n");
 						 return i;
-				} else
+					}
+				} else {
+					printf("Netowrk Interface number wrong\n");
 					return i;
+				}
 
 				server = server_get(&server_endpoint);
-				if(!server)
+				if(!server) {
+					printf("Can'nt get server\n");
 					return i;
+				}
 
 				continue;
 			} else if(!strcmp(argv[i], "-f")) {
@@ -373,12 +463,16 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 				i++;
 				if(is_uint64(argv[i]))
 					wait = parse_uint64(argv[i]);
-				else
+				else {
+					printf("Wait time number wrong\n");
 					return i;
+				}
 
 				continue;
-			} else
+			} else {
+				printf("Wrong arguments\n");
 				return i;
+			}
 		}
 
 		if(server == NULL) {
@@ -396,8 +490,10 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 	} else if(!strcmp(argv[1], "list")) {
 		server_dump();
 		return 0;
-	} else
+	} else {
+		printf("Unknown Command\n");
 		return -1;
+	}
 
 	return 0;
 }

@@ -165,6 +165,12 @@ bool server_set_mode(Server* server, uint8_t mode) {
 	return true;
 }
 
+bool server_set_weight(Server* server, uint8_t weight) {
+	server->weight = weight;
+
+	return true;
+}
+
 bool server_free(Server* server) {
 	uint32_t count = ni_count();
 	for(int i = 0; i < count; i++) {
@@ -327,9 +333,9 @@ void server_dump() {
 		if(state == SERVER_STATE_ACTIVE)
 			printf("ACTIVE\t\t");
 		else if(state == SERVER_STATE_DEACTIVE)
-			printf("Removing\t");
+			printf("DEACTIVE\t");
 		else
-			printf("Unnowkn\t");
+			printf("Unknown\t");
 	}
 	void print_mode(uint8_t mode) {
 		if(mode == MODE_NAT)
@@ -339,7 +345,7 @@ void server_dump() {
 		else if(mode == MODE_DR)
 			printf("DR\t");
 		else
-			printf("Unnowkn\t");
+			printf("Unknown\t");
 	}
 	void print_addr_port(uint32_t addr, uint16_t port) {
 		printf("%d.%d.%d.%d:%d\t", (addr >> 24) & 0xff, (addr >> 16) & 0xff,
@@ -352,6 +358,9 @@ void server_dump() {
 				printf("%d\t", i);
 		}
 	}
+	void print_weight(uint8_t weight) {
+		printf("%d\t", weight);
+	}
 	void print_session_count(Map* sessions) {
 		if(sessions)
 			printf("%d\t", map_size(sessions));
@@ -359,7 +368,7 @@ void server_dump() {
 			printf("0\t");
 	}
 
-	printf("State\t\tAddr:Port\t\tMode\tNIC\tSessions\n");
+	printf("State\t\tAddr:Port\t\tMode\tNIC\tWeight\tSessions\n");
 	uint8_t count = ni_count();
 	for(int i = 0; i < count; i++) {
 		Map* servers = ni_config_get(ni_get(i), SERVERS);
@@ -376,6 +385,7 @@ void server_dump() {
 			print_addr_port(server->endpoint.addr, server->endpoint.port);
 			print_mode(server->mode);
 			print_ni_num(server->endpoint.ni);
+			print_weight(server->weight);
 			print_session_count(server->sessions);
 			printf("\n");
 		}
