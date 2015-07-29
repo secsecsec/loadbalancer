@@ -31,7 +31,7 @@ Server* schedule_weighted_round_robin(Service* service, Endpoint* client_endpoin
 		whole_weight += server->weight;
 	}
 
-	uint32_t _index = (roundrobin->robin++) & whole_weight;
+	uint32_t _index = (roundrobin->robin++) % whole_weight;
 	list_iterator_init(&iter, service->active_servers);
 	while(list_iterator_has_next(&iter)) {
 		Server* server = list_iterator_next(&iter);
