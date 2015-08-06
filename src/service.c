@@ -43,7 +43,6 @@ Service* service_alloc(Endpoint* service_endpoint) {
 
 			return false;
 		} 
-		printf("here???\n");
 
 		return true;
 	}
@@ -628,8 +627,8 @@ void service_dump() {
 			print_addr_port(service->endpoint.addr, service->endpoint.port);
 			print_schedule(service->schedule);
 			print_ni_num(service->endpoint.ni);
-			Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
-			print_session_count(sessions);
+			//Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
+			print_session_count(service->sessions);
 			print_server_count(service->active_servers);
 			printf(" / ");
 			print_server_count(service->deactive_servers);
