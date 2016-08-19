@@ -1,15 +1,15 @@
 #ifndef __INTERFACE_H__
 #define __INTERFACE_H__
 #include <util/types.h>
-#include <net/ni.h>
+#include <net/nic.h>
 
 typedef struct _Endpoint {
-	NetworkInterface*	ni;
+	NIC*	ni;
 	uint32_t		addr;
 	uint8_t			protocol;
 	uint16_t		port;
 } Endpoint;
 
-Endpoint* endpoint_alloc(NetworkInterface* ni, uint32_t addr, uint8_t protocol, uint16_t port);
-bool endpoint_free(NetworkInterface* ni, Endpoint* endpoint);
+Endpoint* endpoint_alloc(NIC* ni, uint32_t addr, uint8_t protocol, uint16_t port);
+bool endpoint_free(NIC* ni, Endpoint* endpoint);
 #endif /* __INTERFACE_H__ */

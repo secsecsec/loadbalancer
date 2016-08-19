@@ -31,7 +31,7 @@ bool session_recharge(Session* session) {
 
 		return true;
 	} else {
-		if(!event_timer_update(session->event_id)) {
+		if(!event_timer_update(session->event_id, 300000000)) {
 			session->event_id = 0;
 			return false;
 		}

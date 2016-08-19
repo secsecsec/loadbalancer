@@ -2,7 +2,7 @@
 #include <util/list.h>
 #include <util/map.h>
 #include <util/types.h>
-#include <net/ni.h>
+#include <net/nic.h>
 #include <net/ether.h>
 #include <net/ip.h>
 #include <net/icmp.h>
@@ -18,7 +18,7 @@
 extern void* __gmalloc_pool;
 
 int lb_ginit() {
-	uint32_t count = ni_count();
+	uint32_t count = nic_count();
 	if(count < 2)
 		return -1;
 
@@ -42,8 +42,8 @@ bool lb_process(Packet* packet) {
 		Endpoint destination_endpoint;
 		Endpoint source_endpoint;
 
-		destination_endpoint.ni = packet->ni;
-		source_endpoint.ni = packet->ni;
+		destination_endpoint.ni = packet->nic;
+		source_endpoint.ni = packet->nic;
 
 		source_endpoint.addr = endian32(ip->source);
 		destination_endpoint.addr = endian32(ip->destination);
@@ -74,9 +74,9 @@ bool lb_process(Packet* packet) {
 		}
 		
 		if(session) {
-			NetworkInterface* server_ni = session->server_endpoint->ni;
+			NIC* server_ni = session->server_endpoint->ni;
 			session->translate(session, packet);
-			ni_output(server_ni, packet);
+			nic_output(server_ni, packet);
 
 			return true;
 		}
@@ -84,9 +84,9 @@ bool lb_process(Packet* packet) {
 		//Server
 		session = server_get_session(&destination_endpoint);
 		if(session) {
-			NetworkInterface* _ni = session->public_endpoint->ni;
+			NIC* _ni = session->public_endpoint->ni;
 			session->untranslate(session, packet);
-			ni_output(_ni, packet);
+			nic_output(_ni, packet);
 
 			return true;
 		}
@@ -97,14 +97,14 @@ bool lb_process(Packet* packet) {
 }
 
 bool lb_is_all_destroied() {
-	int count = ni_count();
+	int count = nic_count();
 	for(int i = 0; i < count; i++) {
-		NetworkInterface* ni = ni_get(i);
-		Map* services = ni_config_get(ni, SERVICES);
+		NIC* ni = nic_get(i);
+		Map* services = nic_config_get(ni, SERVICES);
 		if(services && !map_is_empty(services))
 			return false;
 
-		Map* servers = ni_config_get(ni, SERVERS);
+		Map* servers = nic_config_get(ni, SERVERS);
 		if(servers && !map_is_empty(servers))
 			return false;
 	}
@@ -113,10 +113,10 @@ bool lb_is_all_destroied() {
 }
 
 void lb_remove(uint64_t wait) {
-	int count = ni_count();
+	int count = nic_count();
 	for(int i = 0; i < count; i++) {
-		NetworkInterface* ni = ni_get(i);
-		Map* services = ni_config_get(ni, SERVICES);
+		NIC* ni = nic_get(i);
+		Map* services = nic_config_get(ni, SERVICES);
 		if(services && !map_is_empty(services)) {
 			MapIterator iter;
 			map_iterator_init(&iter, services);
@@ -127,7 +127,7 @@ void lb_remove(uint64_t wait) {
 			}
 		}
 
-		Map* servers = ni_config_get(ni, SERVERS);
+		Map* servers = nic_config_get(ni, SERVERS);
 		if(servers && !map_is_empty(servers)) {
 			MapIterator iter;
 			map_iterator_init(&iter, servers);
@@ -141,10 +141,10 @@ void lb_remove(uint64_t wait) {
 }
 
 void lb_remove_force() {
-	int count = ni_count();
+	int count = nic_count();
 	for(int i = 0; i < count; i++) {
-		NetworkInterface* ni = ni_get(i);
-		Map* services = ni_config_get(ni, SERVICES);
+		NIC* ni = nic_get(i);
+		Map* services = nic_config_get(ni, SERVICES);
 		if(services && !map_is_empty(services)) {
 			MapIterator iter;
 			map_iterator_init(&iter, services);
@@ -155,7 +155,7 @@ void lb_remove_force() {
 			}
 		}
 
-		Map* servers = ni_config_get(ni, SERVERS);
+		Map* servers = nic_config_get(ni, SERVERS);
 		if(servers && !map_is_empty(servers)) {
 			MapIterator iter;
 			map_iterator_init(&iter, servers);
