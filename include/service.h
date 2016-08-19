@@ -1,7 +1,7 @@
 #ifndef __SERVICE_H__
 #define __SERVICE_H__
 
-#include <net/ni.h>
+#include <net/nic.h>
 #include <util/list.h>
 #include <util/map.h>
 
@@ -40,12 +40,12 @@ bool service_set_schedule(Service* service, uint8_t schedule);
 
 bool service_add_private_addr(Service* service, Endpoint* private_endpoint);
 bool service_set_private_addr(Service* service, Endpoint* private_endpoint);
-bool service_remove_private_addr(Service* service, NetworkInterface* ni);
+bool service_remove_private_addr(Service* service, NIC* ni);
 
 bool service_free(Service* service);
 
 Service* service_get(Endpoint* service_endpoint);
-bool service_empty(NetworkInterface* ni);
+bool service_empty(NIC* ni);
 
 Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endpoint);
 Session* service_get_session(Endpoint* client_endpoint);

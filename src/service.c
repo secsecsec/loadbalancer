@@ -23,13 +23,13 @@
 extern void* __gmalloc_pool;
 
 Service* service_alloc(Endpoint* service_endpoint) {
-	bool service_add(NetworkInterface* ni, Service* service) {
-		Map* services = ni_config_get(ni, SERVICES);
+	bool service_add(NIC* ni, Service* service) {
+		Map* services = nic_config_get(ni, SERVICES);
 		if(!services) {
 			services = map_create(16, NULL, NULL, ni->pool);
 			if(!services)
 				return false;
-			if(!ni_config_put(ni, SERVICES, services))
+			if(!nic_config_put(ni, SERVICES, services))
 				return false;
 		}
 
@@ -37,7 +37,7 @@ Service* service_alloc(Endpoint* service_endpoint) {
 
 		if(!map_put(services, (void*)key, service)) {
 			if(map_is_empty(services)) {
-				ni_config_remove(ni, SERVICES);
+				nic_config_remove(ni, SERVICES);
 				map_destroy(services);
 			}
 
@@ -107,8 +107,8 @@ port_alloc_fail:
 }
 
 bool service_free(Service* service) {
-	bool service_remove(NetworkInterface* ni, Service* service) {
-		Map* services = ni_config_get(ni, SERVICES);
+	bool service_remove(NIC* ni, Service* service) {
+		Map* services = nic_config_get(ni, SERVICES);
 		if(!services) {
 			return false;
 		}
@@ -128,7 +128,7 @@ bool service_free(Service* service) {
 
 		while(map_iterator_has_next(&iter)) {
 			MapEntry* entry = map_iterator_next(&iter);
-			NetworkInterface* ni = entry->key;
+			NIC* ni = entry->key;
 			service_remove_private_addr(service, ni);
 		}
 
@@ -231,7 +231,7 @@ bool service_add_private_addr(Service* service, Endpoint* _private_endpoint) {
 		}
 	}
 
-	Map* servers = ni_config_get(private_endpoint->ni, SERVERS);
+	Map* servers = nic_config_get(private_endpoint->ni, SERVERS);
 
 	if(servers) {
 		MapIterator iter;
@@ -291,11 +291,11 @@ bool service_set_private_addr(Service* service, Endpoint* private_endpoint) {
 	return false;
 }
 
-bool service_remove_private_addr(Service* service, NetworkInterface* ni) {
+bool service_remove_private_addr(Service* service, NIC* ni) {
 	if(!service->private_endpoints)
 		return false;
 
-	//Remove Address in NetworkInterface
+	//Remove Address in NIC
 	Endpoint* private_endpoint = map_get(service->private_endpoints, ni);
 	if(!private_endpoint)
 		return false;
@@ -305,8 +305,8 @@ bool service_remove_private_addr(Service* service, NetworkInterface* ni) {
 		service->private_endpoints = NULL;
 	}
 
-	//Remove servers belong NetworkInterface
-	Map* servers = ni_config_get(ni, SERVERS);
+	//Remove servers belong NIC
+	Map* servers = nic_config_get(ni, SERVERS);
 	if(servers) {
 		MapIterator iter;
 		map_iterator_init(&iter, servers);
@@ -329,7 +329,7 @@ bool service_remove_private_addr(Service* service, NetworkInterface* ni) {
 }
 
 Session* service_get_session(Endpoint* client_endpoint) {
-	Map* sessions = ni_config_get(client_endpoint->ni, SESSIONS);
+	Map* sessions = nic_config_get(client_endpoint->ni, SESSIONS);
 	if(!sessions)
 		return NULL;
 
@@ -367,19 +367,19 @@ Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endp
 		goto service_map_put_fail;
 
 	//Add to Service Interface NI
-	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
+	Map* sessions = nic_config_get(service->endpoint.ni, SESSIONS);
 	if(!sessions) {
 		sessions = map_create(4096, NULL, NULL, service->endpoint.ni->pool);
 		if(!sessions)
-			goto service_ni_map_put_fail;
+			goto service_nic_map_put_fail;
 
-		if(!ni_config_put(service->endpoint.ni, SESSIONS, sessions)) {
+		if(!nic_config_put(service->endpoint.ni, SESSIONS, sessions)) {
 			map_destroy(sessions);
-			goto service_ni_map_put_fail;
+			goto service_nic_map_put_fail;
 		}
 	}
 	if(!map_put(sessions, (void*)public_key, session))
-		goto service_ni_map_put_fail;
+		goto service_nic_map_put_fail;
 
 	//Add to Server
 	uint64_t private_key = session_get_private_key(session);
@@ -392,30 +392,30 @@ Session* service_alloc_session(Endpoint* service_endpoint, Endpoint* client_endp
 		goto server_map_put_fail;
 
 	//Add to Server Interface NI
-	sessions = ni_config_get(server->endpoint.ni, SESSIONS);
+	sessions = nic_config_get(server->endpoint.ni, SESSIONS);
 	if(!sessions) {
 		sessions = map_create(4096, NULL, NULL, server->endpoint.ni->pool);
 		if(!sessions)
-			goto server_ni_map_put_fail;
+			goto server_nic_map_put_fail;
 
-		if(!ni_config_put(server->endpoint.ni, SESSIONS, sessions)) {
+		if(!nic_config_put(server->endpoint.ni, SESSIONS, sessions)) {
 			map_destroy(sessions);
-			goto server_ni_map_put_fail;
+			goto server_nic_map_put_fail;
 		}
 	}
 	if(!map_put(sessions, (void*)private_key, session))
-		goto server_ni_map_put_fail;
+		goto server_nic_map_put_fail;
 
 	session->fin = false;
 
 	return session;
 
-server_ni_map_put_fail:
+server_nic_map_put_fail:
 	map_remove(server->sessions, (void*)private_key);
 server_map_put_fail:
-	sessions = ni_config_get(service->endpoint.ni, SESSIONS);
+	sessions = nic_config_get(service->endpoint.ni, SESSIONS);
 	map_remove(sessions, (void*)public_key);
-service_ni_map_put_fail:
+service_nic_map_put_fail:
 	map_remove(service->sessions, (void*)public_key);
 service_map_put_fail:
 	session->free(session);
@@ -425,7 +425,7 @@ service_map_put_fail:
 
 bool service_free_session(Session* session) {
 	//Remove from Server NI
-	Map* sessions = ni_config_get(session->server_endpoint->ni, SESSIONS);
+	Map* sessions = nic_config_get(session->server_endpoint->ni, SESSIONS);
 	uint64_t private_key = session_get_private_key(session);
 	if(!map_remove(sessions, (void*)private_key)) {
 		printf("Can'nt remove session from private ni\n");
@@ -440,7 +440,7 @@ bool service_free_session(Session* session) {
 	}
 
 	//Remove from Service Interface NI
-	sessions = ni_config_get(session->public_endpoint->ni, SESSIONS);
+	sessions = nic_config_get(session->public_endpoint->ni, SESSIONS);
 	uint64_t client_key = session_get_public_key(session);
 	if(!map_remove(sessions, (void*)client_key)) {
 		printf("Can'nt remove session from service ni\n");
@@ -463,14 +463,14 @@ session_free_fail:
 	return false;
 }
 
-bool service_empty(NetworkInterface* ni) {
-	Map* services = ni_config_get(ni, SERVICES);
+bool service_empty(NIC* ni) {
+	Map* services = nic_config_get(ni, SERVICES);
 
 	return map_is_empty(services);
 }
 
 Service* service_get(Endpoint* service_endpoint) {
-	Map* services = ni_config_get(service_endpoint->ni, SERVICES);
+	Map* services = nic_config_get(service_endpoint->ni, SERVICES);
 	if(!services) {
 		return NULL;
 	}
@@ -528,7 +528,7 @@ bool service_remove_force(Service* service) {
 	service->state = SERVICE_STATE_DEACTIVE;
 
 	//Remove sessions
-	Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
+	Map* sessions = nic_config_get(service->endpoint.ni, SESSIONS);
 	if(sessions && !map_is_empty(sessions)) {
 		MapIterator iter;
 		map_iterator_init(&iter, sessions);
@@ -585,10 +585,10 @@ void service_dump() {
 				break;
 		}
 	}
-	void print_ni_num(NetworkInterface* ni) {
-		uint8_t count = ni_count();
+	void print_nic_num(NIC* ni) {
+		uint8_t count = nic_count();
 		for(int i = 0; i < count; i++) {
-			if(ni == ni_get(i))
+			if(ni == nic_get(i))
 				printf("%d\t", i);
 		}
 	}
@@ -607,11 +607,11 @@ void service_dump() {
 
 
 	printf("State\t\tProtocol\tAddr:Port\t\tSchedule\tNIC\tSession\tServer\n");
-	int count = ni_count();
+	int count = nic_count();
 	for(int i = 0; i < count; i++) {
-		NetworkInterface* ni = ni_get(i);
+		NIC* ni = nic_get(i);
 
-		Map* services = ni_config_get(ni, SERVICES);
+		Map* services = nic_config_get(ni, SERVICES);
 		if(!services)
 			continue;
 
@@ -626,7 +626,7 @@ void service_dump() {
 			print_protocol(service->endpoint.protocol);
 			print_addr_port(service->endpoint.addr, service->endpoint.port);
 			print_schedule(service->schedule);
-			print_ni_num(service->endpoint.ni);
+			print_nic_num(service->endpoint.ni);
 			//Map* sessions = ni_config_get(service->endpoint.ni, SESSIONS);
 			print_session_count(service->sessions);
 			print_server_count(service->active_servers);

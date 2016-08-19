@@ -104,7 +104,7 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					service_endpoint.ni = ni_get(ni_num);
+					service_endpoint.ni = nic_get(ni_num);
 					if(!service_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
@@ -129,7 +129,7 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					service_endpoint.ni = ni_get(ni_num);
+					service_endpoint.ni = nic_get(ni_num);
 					if(!service_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
@@ -171,7 +171,7 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 				i++;
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					private_endpoint.ni = ni_get(ni_num);
+					private_endpoint.ni = nic_get(ni_num);
 					if(!private_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
@@ -212,7 +212,7 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					service_endpoint.ni = ni_get(ni_num);
+					service_endpoint.ni = nic_get(ni_num);
 					if(!service_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
@@ -239,7 +239,7 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					service_endpoint.ni = ni_get(ni_num);
+					service_endpoint.ni = nic_get(ni_num);
 					if(!service_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
@@ -315,7 +315,7 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					server_endpoint.ni = ni_get(ni_num);
+					server_endpoint.ni = nic_get(ni_num);
 					if(!server_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						 return i;
@@ -342,7 +342,7 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					server_endpoint.ni = ni_get(ni_num);
+					server_endpoint.ni = nic_get(ni_num);
 					if(!server_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
@@ -419,7 +419,7 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					server_endpoint.ni = ni_get(ni_num);
+					server_endpoint.ni = nic_get(ni_num);
 					if(!server_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						return i;
@@ -446,7 +446,7 @@ static int cmd_server(int argc, char** argv, void(*callback)(char* result, int e
 
 				if(is_uint8(argv[i])) {
 					uint8_t ni_num = parse_uint8(argv[i]);
-					server_endpoint.ni = ni_get(ni_num);
+					server_endpoint.ni = nic_get(ni_num);
 					if(!server_endpoint.ni) {
 						printf("Netowrk Interface number wrong\n");
 						 return i;
@@ -575,17 +575,17 @@ int main(int argc, char** argv) {
 	
 	thread_barrior();
 
-	int count = ni_count();
+	int count = nic_count();
 	while(is_continue) {
 		for(int i = 0; i < count; i++) {
-			NetworkInterface* ni = ni_get(i);
-			if(ni_has_input(ni)) {
-				Packet* packet = ni_input(ni);
+			NIC* ni = nic_get(i);
+			if(nic_has_input(ni)) {
+				Packet* packet = nic_input(ni);
 				if(!packet)
 					continue;
 
 				if(!lb_process(packet))
-					ni_free(packet);
+					nic_free(packet);
 			}
 		}
 		event_loop();

@@ -1,19 +1,19 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <net/ni.h>
+#include <net/nic.h>
 #include <util/map.h>
 
 #include "addr_manager.h"
 
-bool addr_alloc(NetworkInterface* ni, uint32_t addr) {
-	Map* addrs = ni_config_get(ni, ADDRS);
+bool addr_alloc(NIC* ni, uint32_t addr) {
+	Map* addrs = nic_config_get(ni, ADDRS);
 	if(!addrs) {
 		addrs = map_create(16, NULL, NULL, ni->pool);
 		if(!addrs)
 			return false;
 
-		if(!ni_config_put(ni, ADDRS, addrs)) {
+		if(!nic_config_put(ni, ADDRS, addrs)) {
 			map_destroy(addrs);
 			return false;
 		}
@@ -22,7 +22,7 @@ bool addr_alloc(NetworkInterface* ni, uint32_t addr) {
 	uint64_t count = (uint64_t)map_get(addrs, (void*)(uintptr_t)addr);
 
 	if(!count) {
-		if(!ni_ip_add(ni, addr)) {
+		if(!nic_ip_add(ni, addr)) {
 			printf("Can'nt allocate address\n");
 			return false;
 		}
@@ -35,8 +35,8 @@ bool addr_alloc(NetworkInterface* ni, uint32_t addr) {
 	return map_update(addrs, (void*)(uintptr_t)addr, (void*)(uintptr_t)count);
 }
 
-bool addr_free(NetworkInterface* ni, uint32_t addr) {
-	Map* addrs = ni_config_get(ni, ADDRS);
+bool addr_free(NIC* ni, uint32_t addr) {
+	Map* addrs = nic_config_get(ni, ADDRS);
 	if(!addrs)
 		return false;
 
@@ -44,11 +44,11 @@ bool addr_free(NetworkInterface* ni, uint32_t addr) {
 	count--;
 
 	if(!count) {
-		ni_ip_remove(ni, addr);
+		nic_ip_remove(ni, addr);
 		map_remove(addrs, (void*)(uintptr_t)addr);
 		if(map_is_empty(addrs)) {
 			map_destroy(addrs);
-			ni_config_remove(ni, ADDRS);
+			nic_config_remove(ni, ADDRS);
 		}
 	} else
 		return map_update(addrs, (void*)(uintptr_t)addr, (void*)(uintptr_t)count);

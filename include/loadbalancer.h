@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <util/map.h>
-#include <net/ni.h>
+#include <net/nic.h>
 #include <stdbool.h>
 
 int lb_ginit();
