@@ -8,7 +8,8 @@
 #define SCHEDULE_RANDOM			2
 #define SCHEDULE_LEAST			3
 #define SCHEDULE_SOURCE_IP_HASH		4
-#define SCHEDULE_WEIGHTED_ROUND_ROBIN	5
+#define SCHEDULE_DESTINATION_IP_HASH	5
+#define SCHEDULE_WEIGHTED_ROUND_ROBIN	6
 
 typedef struct _RoundRobin {
 	uint32_t robin;
@@ -19,5 +20,6 @@ Server* schedule_weighted_round_robin(Service* service, Endpoint* client_endpoin
 Server* schedule_random(Service* service, Endpoint* client_endpoint);
 Server* schedule_least(Service* service, Endpoint* client_endpoint);
 Server* schedule_source_ip_hash(Service* service, Endpoint* client_endpoint);
+Server* schedule_destination_ip_hash(Service* service, Endpoint* client_endpoint);
 
 #endif /*__SCHEDULE_H__*/

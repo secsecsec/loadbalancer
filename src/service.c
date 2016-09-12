@@ -177,6 +177,9 @@ bool service_set_schedule(Service* service, uint8_t schedule) {
 		case SCHEDULE_SOURCE_IP_HASH:
 			service->next = schedule_source_ip_hash;
 			break;
+		case SCHEDULE_DESTINATION_IP_HASH:
+			service->next = schedule_destination_ip_hash;
+			break;
 		case SCHEDULE_WEIGHTED_ROUND_ROBIN:
 			service->next = schedule_weighted_round_robin;
 			RoundRobin* wrr = __malloc(sizeof(RoundRobin), service->endpoint.ni->pool);
@@ -578,7 +581,10 @@ void service_dump() {
 				printf("Least Connection\t");
 				break;
 			case SCHEDULE_SOURCE_IP_HASH:
-				printf("Hashing\t\t");
+				printf("Source Hashing\t\t");
+				break;
+			case SCHEDULE_DESTINATION_IP_HASH:
+				printf("Destination Hashing\t\t");
 				break;
 			case SCHEDULE_WEIGHTED_ROUND_ROBIN:
 				printf("W Round-Robin\t");

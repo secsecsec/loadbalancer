@@ -100,6 +100,19 @@ Server* schedule_source_ip_hash(Service* service, Endpoint* client_endpoint) {
 	return list_get(service->active_servers, index);
 }
 
+Server* schedule_destination_ip_hash(Service* service, Endpoint* client_endpoint) {
+	if(!service->active_servers)
+		return NULL;
+
+	uint32_t count = list_size(service->active_servers);
+	if(count == 0)
+		return NULL;
+
+	uint32_t index = service->endpoint.addr % count;
+
+	return list_get(service->active_servers, index);
+}
+
 Server* schedule_min_request_time(Service* service, Endpoint* client_endpoint) {
 	return NULL;
 }

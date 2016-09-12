@@ -156,6 +156,8 @@ static int cmd_service(int argc, char** argv, void(*callback)(char* result, int 
 					schedule = SCHEDULE_LEAST;
 				else if(!strcmp(argv[i], "h"))
 					schedule = SCHEDULE_SOURCE_IP_HASH;
+				else if(!strcmp(argv[i], "d"))
+					schedule = SCHEDULE_DESTINATION_IP_HASH;
 				else if(!strcmp(argv[i], "w"))
 					schedule = SCHEDULE_WEIGHTED_ROUND_ROBIN;
 				else
@@ -584,7 +586,7 @@ int main(int argc, char** argv) {
 				if(!packet)
 					continue;
 
-				if(!lb_process(packet))
+				if(!lb_process(packet)) 
 					nic_free(packet);
 			}
 		}
