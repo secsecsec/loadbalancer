@@ -1,7 +1,7 @@
 #ifndef __SERVER_H__
 #define __SERVER_H__
 #include <stdbool.h>
-#include <net/ni.h>
+#include <net/nic.h>
 #include <util/map.h>
 #include <util/set.h>
 
